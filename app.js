@@ -1,3 +1,5 @@
+import { Z_FULL_FLUSH } from 'zlib';
+
 /*-----------------------------------------------------------------------------
 A simple echo bot for the Microsoft Bot Framework. 
 -----------------------------------------------------------------------------*/
@@ -47,13 +49,35 @@ var basicQnAMakerDialog = new builder_cognitiveservices.QnAMakerDialog({
                 qnaThreshold: 0.3}
 );
 
+basicQnAMakerDialog.respondFromQnAMakerResult = function(session, qnaMakerResult){
+    // Save the question
+    var question = session.message.text;
+    session.conversationData.userQuestion = question;
+    
+    if (qnaMakerResult.answers && qnaMakerResult.score >= 0.5){
+
+        var followUps = ""
+        if (qnaMakerResult.answers[0].followUps !== 'undefined' && qnaMakerResult.answers[0].followUps.length > 0) {
+            for (i = 0; i < qnaMakerResult.answers[0].followUps.length; i++) {
+                followUps += qnaMakerResult.answers[0].followUps[i] + "|";
+            }
+        }
+
+        session.sendTyping();
+        session.send(qnaMakerResult.answers[0].answer);
+
+        const msg = "Can I help you with anything else?";
+        builder.Prompts.choice(session, msg, followUps, { listStyle: builder.ListStyle.button });
+    }
+}
+
 bot.dialog('basicQnAMakerDialog', basicQnAMakerDialog);
 
 bot.dialog('/', //basicQnAMakerDialog);
 [
     function (session){
-        var qnaKnowledgebaseId = process.env.QnAKnowledgebaseId;
-        var qnaSubscriptionKey = process.env.QnASubscriptionKey;
+        const qnaKnowledgebaseId = process.env.QnAKnowledgebaseId;
+        const qnaSubscriptionKey = process.env.QnASubscriptionKey;
         
         // QnA Subscription Key and KnowledgeBase Id null verification
         if((qnaSubscriptionKey == null || qnaSubscriptionKey == '') || (qnaKnowledgebaseId == null || qnaKnowledgebaseId == ''))
