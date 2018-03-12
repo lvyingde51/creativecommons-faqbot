@@ -1,7 +1,5 @@
-import { Z_FULL_FLUSH } from 'zlib';
-
 /*-----------------------------------------------------------------------------
-A simple echo bot for the Microsoft Bot Framework. 
+A FAQ bot for the Microsoft Bot Framework. 
 -----------------------------------------------------------------------------*/
 
 var restify = require('restify');
@@ -50,10 +48,7 @@ var basicQnAMakerDialog = new builder_cognitiveservices.QnAMakerDialog({
 );
 
 basicQnAMakerDialog.respondFromQnAMakerResult = function(session, qnaMakerResult){
-    // Save the question
-    var question = session.message.text;
-    session.conversationData.userQuestion = question;
-    
+
     if (qnaMakerResult.answers && qnaMakerResult.score >= 0.5){
 
         qnaAnswerResponse = JSON.parse(qnaMakerResult.answers[0])
