@@ -56,18 +56,21 @@ basicQnAMakerDialog.respondFromQnAMakerResult = function(session, qnaMakerResult
     
     if (qnaMakerResult.answers && qnaMakerResult.score >= 0.5){
 
+        qnaAnswerResponse = JSON.parse(qnaMakerResult.answers[0])
+        session.sendTyping();
+        session.send(qnaAnswerResponse.answer);
+
         var followUps = ""
-        if (qnaMakerResult.answers[0].followUps !== 'undefined' && qnaMakerResult.answers[0].followUps.length > 0) {
-            for (i = 0; i < qnaMakerResult.answers[0].followUps.length; i++) {
-                followUps += qnaMakerResult.answers[0].followUps[i] + "|";
+        if (qnaAnswerResponse.followUps !== 'undefined' && qnaAnswerResponse.followUps.length > 0) {
+            for (i = 0; i < qnaAnswerResponse.followUps.length; i++) {
+                followUps += qnaAnswerResponse.followUps.followUps[i] + "|";
             }
         }
 
-        session.sendTyping();
-        session.send(qnaMakerResult.answers[0].answer);
-
-        const msg = "Can I help you with anything else?";
-        builder.Prompts.choice(session, msg, followUps, { listStyle: builder.ListStyle.button });
+        if (followUps !== "") {
+            const msg = "Can I help you with anything else?";
+            builder.Prompts.choice(session, msg, followUps, { listStyle: builder.ListStyle.button });
+        }
     }
 }
 
