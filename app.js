@@ -2,21 +2,28 @@
 A FAQ bot for the Microsoft Bot Framework. 
 -----------------------------------------------------------------------------*/
 
-var restify = require('restify');
-var builder = require('botbuilder');
-var botbuilder_azure = require("botbuilder-azure");
-var builder_cognitiveservices = require("botbuilder-cognitiveservices");
+const restify = require('restify');
+const builder = require('botbuilder');
+const cognitiveservices = require("botbuilder-cognitiveservices");
+
+
+// Setup KB
+const faqRecognizer = new cognitiveservices.QnAMakerRecognizer({
+	knowledgeBaseId: process.env.QnAKnowledgebaseId, 
+	subscriptionKey: process.env.QnASubscriptionKey,
+top: 3});
 
 // Setup Restify Server
-var server = restify.createServer();
+const server = restify.createServer();
 server.listen(process.env.port || process.env.PORT || 3978, function () {
    console.log('%s listening to %s', server.name, server.url); 
 });
   
 // Create chat connector for communicating with the Bot Framework Service
-var connector = new builder.ChatConnector({
+const connector = new builder.ChatConnector({
     appId: process.env.MicrosoftAppId,
     appPassword: process.env.MicrosoftAppPassword,
+    stateEndpoint: process.env.BotStateEndpoint,
     openIdMetadata: process.env.BotOpenIdMetadata 
 });
 
@@ -29,58 +36,51 @@ server.post('/api/messages', connector.listen());
 * For samples and documentation, see: https://github.com/Microsoft/BotBuilder-Azure
 * ---------------------------------------------------------------------------------------- */
 
-var tableName = 'botdata';
-var azureTableClient = new botbuilder_azure.AzureTableClient(tableName, process.env['AzureWebJobsStorage']);
-var tableStorage = new botbuilder_azure.AzureBotStorage({ gzipData: false }, azureTableClient);
-
 // Create your bot with a function to receive messages from the user
-var bot = new builder.UniversalBot(connector);
-bot.set('storage', tableStorage);
+const bot = new builder.UniversalBot(connector)
 
-var recognizer = new builder_cognitiveservices.QnAMakerRecognizer({
-                knowledgeBaseId: process.env.QnAKnowledgebaseId, 
-    subscriptionKey: process.env.QnASubscriptionKey});
-
-var basicQnAMakerDialog = new builder_cognitiveservices.QnAMakerDialog({
-    recognizers: [recognizer],
-                defaultMessage: 'No match! Try changing the query terms!',
-                qnaThreshold: 0.3}
-);
-
-basicQnAMakerDialog.respondFromQnAMakerResult = function(session, qnaMakerResult){
-
-    if (qnaMakerResult.answers && qnaMakerResult.score >= 0.5){
-
-        qnaAnswerResponse = JSON.parse(qnaMakerResult.answers[0])
-        session.sendTyping();
-        session.send(qnaAnswerResponse.answer);
-
-        var followUps = ""
-        if (qnaAnswerResponse.followUps !== 'undefined' && qnaAnswerResponse.followUps.length > 0) {
-            for (i = 0; i < qnaAnswerResponse.followUps.length; i++) {
-                followUps += qnaAnswerResponse.followUps.followUps[i] + "|";
+// Send welcome when conversation with bot is started, by initiating the root dialog
+bot.on('conversationUpdate', function (message) {
+    if (message.membersAdded) {
+        message.membersAdded.forEach(function (identity) {
+            if (identity.id === message.address.bot.id) {
+                // bot.beginDialog(message.address, '/');
+                var msg = new builder.Message().address(message.address);
+                msg.text('Hello, how may I help you? You can ask me things about Creative Commons.');
+                msg.textLocale('en-US');
+                bot.send(msg);
             }
-        }
-
-        if (followUps !== "") {
-            const msg = "Can I help you with anything else?";
-            builder.Prompts.choice(session, msg, followUps, { listStyle: builder.ListStyle.button });
-        }
+        });
     }
+});
+
+
+const qnaMakerTools = new cognitiveservices.QnAMakerTools();
+bot.library(qnaMakerTools.createLibrary());
+
+const basicQnAMakerDialog = new cognitiveservices.QnAMakerDialog({
+	recognizers: [faqRecognizer],
+	defaultMessage: 'I am having trouble understanding your question.. Can you try asking me another way?',
+	qnaThreshold: 0.3,
+	feedbackLib: qnaMakerTools
+});
+
+// Override to also include the knowledgebase question with the answer on confident matches
+basicQnAMakerDialog.respondFromQnAMakerResult = function(session, qnaMakerResult){
+	var result = qnaMakerResult;
+	var response = result.answers[0].answer;
+	session.send(response);
 }
 
-bot.dialog('basicQnAMakerDialog', basicQnAMakerDialog);
+// Override to log user query and matched Q&A before ending the dialog
+basicQnAMakerDialog.defaultWaitNextMessage = function(session, qnaMakerResult){
+	if(session.privateConversationData.qnaFeedbackUserQuestion != null && qnaMakerResult.answers != null && qnaMakerResult.answers.length > 0 
+		&& qnaMakerResult.answers[0].questions != null && qnaMakerResult.answers[0].questions.length > 0 && qnaMakerResult.answers[0].answer != null){
+			console.log('User Query: ' + session.privateConversationData.qnaFeedbackUserQuestion);
+			console.log('KB Question: ' + qnaMakerResult.answers[0].questions[0]);
+			console.log('KB Answer: ' + qnaMakerResult.answers[0].answer);
+		}
+	session.endDialog();
+}
 
-bot.dialog('/', //basicQnAMakerDialog);
-[
-    function (session){
-        const qnaKnowledgebaseId = process.env.QnAKnowledgebaseId;
-        const qnaSubscriptionKey = process.env.QnASubscriptionKey;
-        
-        // QnA Subscription Key and KnowledgeBase Id null verification
-        if((qnaSubscriptionKey == null || qnaSubscriptionKey == '') || (qnaKnowledgebaseId == null || qnaKnowledgebaseId == ''))
-            session.send('Please set QnAKnowledgebaseId and QnASubscriptionKey in App Settings. Get them at https://qnamaker.ai.');
-        else
-            session.replaceDialog('basicQnAMakerDialog');
-    }
-]);
+bot.dialog('/', basicQnAMakerDialog);
