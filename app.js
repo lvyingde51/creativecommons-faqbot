@@ -5,13 +5,20 @@ A FAQ bot for the Microsoft Bot Framework.
 const restify = require('restify');
 const builder = require('botbuilder');
 const cognitiveservices = require("botbuilder-cognitiveservices");
+const smallTalkReplies = require("./smalltalk");
 
 
-// Setup KB
+// Setup Creative Commons FAQ KB
 const faqRecognizer = new cognitiveservices.QnAMakerRecognizer({
 	knowledgeBaseId: process.env.QnAKnowledgebaseId, 
 	subscriptionKey: process.env.QnASubscriptionKey,
 top: 3});
+
+// Setup Small Talk KB
+const smalltalkRecognizer = new cognitiveservices.QnAMakerRecognizer({
+    knowledgeBaseId: process.env.SmallTalkKnowledgebaseId,
+    subscriptionKey: process.env.QnASubscriptionKey,
+})
 
 // Setup Restify Server
 const server = restify.createServer();
@@ -59,7 +66,7 @@ const qnaMakerTools = new cognitiveservices.QnAMakerTools();
 bot.library(qnaMakerTools.createLibrary());
 
 const basicQnAMakerDialog = new cognitiveservices.QnAMakerDialog({
-	recognizers: [faqRecognizer],
+	recognizers: [faqRecognizer, smalltalkRecognizer],
 	defaultMessage: 'I am having trouble understanding your question.. Can you try asking me another way?',
 	qnaThreshold: 0.3,
 //	feedbackLib: qnaMakerTools
@@ -69,15 +76,22 @@ const basicQnAMakerDialog = new cognitiveservices.QnAMakerDialog({
 basicQnAMakerDialog.respondFromQnAMakerResult = function(session, qnaMakerResult){
 	var result = qnaMakerResult;
     var response = result.answers[0].answer;
-    var faqAnswer = JSON.parse(response);
-    console.log(faqAnswer);
-    session.send(faqAnswer.answer);
-    
-    if (faqAnswer.followUps !== 'undefined' && faqAnswer.followUps.length > 0) {
-        console.log("There are followUps!");
-        builder.Prompts
-            .choice(session, 'You can also ask me the following things..', 
-            faqAnswer.followUps, { listStyle: builder.ListStyle.button });
+
+    if (response.includes('{')) {
+        var faqAnswer = JSON.parse(response);
+        console.log(faqAnswer);
+        session.send(faqAnswer.answer);
+        
+        if (faqAnswer.followUps !== 'undefined' && faqAnswer.followUps.length > 0) {
+            console.log("There are followUps!");
+            builder.Prompts
+                .choice(session, 'You can also ask me the following things..', 
+                faqAnswer.followUps, { listStyle: builder.ListStyle.button });
+        } 
+    } else {
+        const botReplies = smallTalkReplies[response]
+        const replyIndex = Math.floor(Math.random() * botReplies.length)
+        session.send(botReplies[replyIndex]);
     }
 }
 
