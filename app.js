@@ -62,25 +62,36 @@ const basicQnAMakerDialog = new cognitiveservices.QnAMakerDialog({
 	recognizers: [faqRecognizer],
 	defaultMessage: 'I am having trouble understanding your question.. Can you try asking me another way?',
 	qnaThreshold: 0.3,
-	feedbackLib: qnaMakerTools
+//	feedbackLib: qnaMakerTools
 });
 
 // Override to also include the knowledgebase question with the answer on confident matches
 basicQnAMakerDialog.respondFromQnAMakerResult = function(session, qnaMakerResult){
 	var result = qnaMakerResult;
-	var response = result.answers[0].answer;
-	session.send(response);
+    var response = result.answers[0].answer;
+    var faqAnswer = JSON.parse(response);
+    console.log(faqAnswer);
+    session.send(faqAnswer.answer);
+    
+    if (faqAnswer.followUps !== 'undefined' && faqAnswer.followUps.length > 0) {
+        console.log("There are followUps!");
+        builder.Prompts
+            .choice(session, 'You can also ask me the following things..', 
+            faqAnswer.followUps, { listStyle: builder.ListStyle.button });
+    }
 }
 
-// Override to log user query and matched Q&A before ending the dialog
-basicQnAMakerDialog.defaultWaitNextMessage = function(session, qnaMakerResult){
-	if(session.privateConversationData.qnaFeedbackUserQuestion != null && qnaMakerResult.answers != null && qnaMakerResult.answers.length > 0 
-		&& qnaMakerResult.answers[0].questions != null && qnaMakerResult.answers[0].questions.length > 0 && qnaMakerResult.answers[0].answer != null){
-			console.log('User Query: ' + session.privateConversationData.qnaFeedbackUserQuestion);
-			console.log('KB Question: ' + qnaMakerResult.answers[0].questions[0]);
-			console.log('KB Answer: ' + qnaMakerResult.answers[0].answer);
-		}
-	session.endDialog();
-}
+
+// // Override to log user query and matched Q&A before ending the dialog
+// basicQnAMakerDialog.defaultWaitNextMessage = function(session, qnaMakerResult){
+// 	if(session.privateConversationData.qnaFeedbackUserQuestion != null && qnaMakerResult.answers != null && qnaMakerResult.answers.length > 0 
+// 		&& qnaMakerResult.answers[0].questions != null && qnaMakerResult.answers[0].questions.length > 0 && qnaMakerResult.answers[0].answer != null){
+// 			console.log('User Query: ' + session.privateConversationData.qnaFeedbackUserQuestion);
+// 			console.log('KB Question: ' + qnaMakerResult.answers[0].questions[0]);
+// 			console.log('KB Answer: ' + qnaMakerResult.answers[0].answer);
+// 		}
+// 	session.endDialog();
+// }
 
 bot.dialog('/', basicQnAMakerDialog);
+
