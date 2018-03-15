@@ -53,7 +53,7 @@ bot.on('conversationUpdate', function (message) {
             if (identity.id === message.address.bot.id) {
                 // bot.beginDialog(message.address, '/');
                 var msg = new builder.Message().address(message.address);
-                msg.text('Hello, how may I help you? You can ask me things about Creative Commons.');
+                msg.text('Hey there, how may I help you? You can ask me things about Creative Commons.');
                 msg.textLocale('en-US');
                 bot.send(msg);
             }
